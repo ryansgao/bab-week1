@@ -4,7 +4,7 @@ An interactive marimo notebook covering the cryptography behind blockchains (has
 
 ## Open it in the browser (no install)
 
-**Open in your browser (no install, no account):** https://molab.marimo.io/github/ryansgao/bab-week1-fundamentals-notebook/blob/main/week1.py/wasm
+**Open in your browser (no install, no account):** https://molab.marimo.io/github/ryansgao/bab-week1/blob/main/week1.py/wasm
 
 The `/wasm` link runs the whole notebook in your browser with Pyodide, so there's nothing to install and no sign-in. The first load takes about 10 seconds while Python downloads.
 
