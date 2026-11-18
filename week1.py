@@ -178,7 +178,7 @@ def _(mo):
 
     - Read top to bottom. Each shaded box is an experiment: answer its question in your head, then change the controls.
     - Collapsed sections are optional extras.
-    - You need algebra and a little Python; modular arithmetic is explained when it comes up. The code is hidden (`marimo edit` shows it).
+    - You need algebra and a little Python; modular arithmetic is explained when it comes up. You can skip the faded code cells: the lesson reads without them.
 
     ## Learning objectives
 
