@@ -27,7 +27,7 @@ marimo run week1.py
 
 `marimo run` opens the lesson as an app with the code hidden. To read or change the code, use `marimo edit week1.py` instead.
 
-Dependencies: `marimo` (tested on 0.25.2), `altair`, `numpy`, `pandas`. Everything else is the Python standard library (`hashlib`, `math`, `random`).
+Dependencies: `marimo` (tested on 0.25.2), `altair`, `numpy`, `pandas`, and `anywidget` (for the dark-mode switch). Everything else is the Python standard library (`hashlib`, `math`, `random`).
 
 ## What's in it
 
