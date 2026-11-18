@@ -2,3 +2,4 @@ marimo>=0.25
 altair>=5
 numpy>=1.24
 pandas>=2.0
+anywidget>=0.9

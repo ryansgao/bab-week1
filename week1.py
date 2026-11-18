@@ -5,6 +5,7 @@
 #     "altair>=5",
 #     "numpy>=1.24",
 #     "pandas>=2.0",
+#     "anywidget>=0.9",
 # ]
 # ///
 
@@ -118,12 +119,62 @@ def _(mo):
 
 @app.cell(hide_code=True)
 def _(mo):
+    # Page styling and the dark-mode switch.
+    # The CSS lifts marimo's 610 px cap on cell outputs, so long outputs show in
+    # full with no inner scroll box. (App(css_file=...) would do the same when run
+    # locally, but the molab/marimo.app WebAssembly link never loads that file.)
+    # The switch flips marimo's own theme through the data-vscode-theme-kind
+    # attribute on <body>, which marimo watches; charts and widgets follow it.
+    import anywidget
+
+    _page_css = """
+    <style>
+    .marimo-cell .output-area,
+    .marimo-cell .console-output-area { max-height: none !important; overflow: visible !important; }
+    </style>
+    """
+
+    class _DarkModeSwitch(anywidget.AnyWidget):
+        _esm = """
+        function render({ el }) {
+          const label = document.createElement("label");
+          const input = document.createElement("input");
+          input.type = "checkbox";
+          input.setAttribute("role", "switch");
+          const sync = () => { input.checked = document.body.classList.contains("dark"); };
+          sync();
+          input.addEventListener("change", () => {
+            document.body.dataset.vscodeThemeKind = input.checked ? "vscode-dark" : "vscode-light";
+          });
+          const watch = new MutationObserver(sync);
+          watch.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+          label.append(input, document.createTextNode("Dark mode"));
+          el.append(label);
+          return () => watch.disconnect();
+        }
+        export default { render };
+        """
+        _css = """
+        label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+                font-size: 0.875rem; color: var(--slate-11, #555); user-select: none; }
+        input { appearance: none; -webkit-appearance: none; margin: 0; cursor: pointer;
+                width: 34px; height: 20px; border-radius: 999px; position: relative;
+                background: var(--slate-6, #ccc); transition: background 0.15s; }
+        input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+                       border-radius: 50%; background: #fff; transition: transform 0.15s; }
+        input:checked { background: var(--blue-9, #3b82f6); }
+        input:checked::after { transform: translateX(14px); }
+        input:focus-visible { outline: 2px solid var(--blue-8, #3b82f6); outline-offset: 2px; }
+        """
+
+    mo.vstack([mo.Html(_page_css), mo.hstack([_DarkModeSwitch()], justify="end")], gap=0)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
     mo.md(r"""
     # Week 1: Fundamentals and Bitcoin
-
-    *Blockchain at Berkeley education curriculum. Content checked November 2026.*
-
-    How to use this notebook:
 
     - Read top to bottom. Each shaded box is an experiment: answer its question in your head, then change the controls.
     - Collapsed sections are optional extras.
