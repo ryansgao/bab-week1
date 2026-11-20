@@ -29,7 +29,8 @@ with sync_playwright() as p:
         f.evaluate("""(label) => { const walk = r => { for (const e of r.querySelectorAll('*')) { if (e.shadowRoot) { const x = walk(e.shadowRoot); if (x) return x; } if (e.tagName === 'BUTTON' && e.closest('nav') && e.textContent === label) return e; } }; walk(document).click(); }""", label)
         time.sleep(2.5)
         top = f.evaluate("id => document.getElementById(id).getBoundingClientRect().top", hid)
-        ok = f.url == start_url and f.get_by_text("Page not found").count() == 0 and -80 <= top <= 300
+        still_here = f.evaluate("!!document.getElementById('sources')")  # the notebook, not a missing-page screen
+        ok = f.url == start_url and still_here and -80 <= top <= 300
         if not ok:
             fails.append(f"{label}: top={top:.0f} url_changed={f.url != start_url}")
         print("ok  " if ok else "FAIL", label, f"heading at {top:.0f}px")

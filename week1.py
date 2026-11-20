@@ -94,7 +94,7 @@ def _(hashlib, mo):
 def _(anywidget, mo, traitlets):
     # Sidebar menu. Buttons that scroll to each heading, not "#id" links:
     # on molab the notebook page sets a <base> address, so a plain "#id" link
-    # resolves to another URL and opens "Page not found" (mo.nav_menu did that).
+    # resolves to another URL and opens a missing-page error (mo.nav_menu did that).
     class _SectionNav(anywidget.AnyWidget):
         _esm = r"""
         function render({ model, el }) {
