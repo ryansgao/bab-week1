@@ -7,9 +7,14 @@ One contract on Sepolia records every week's completions, so learners see the sa
 | Network | Ethereum Sepolia (chain ID 11155111) |
 | Address | `0xAAbFe9b00f1c6d18367425D454371198A7a0624b` |
 | Explorer | https://sepolia.etherscan.io/address/0xAAbFe9b00f1c6d18367425D454371198A7a0624b |
+| Verified source | Sourcify exact match: https://repo.sourcify.dev/11155111/0xAAbFe9b00f1c6d18367425D454371198A7a0624b (also readable on https://eth-sepolia.blockscout.com/address/0xAAbFe9b00f1c6d18367425D454371198A7a0624b?tab=contract) |
+| Deployed | November 20, 2026, block 12,173,450, tx `0xaa63258062b2e2f698b7de496abe6c4175c9c1e066faaadfdffabe4783355d17` |
 | Compiler | Solidity 0.8.28, optimizer on, 200 runs |
 
 ## Interface
+
+Gas: recording costs about 128,000 gas (about 0.00013 Sepolia ETH at November 2026 fees). Sending ETH to a brand-new address on Sepolia now costs about 200,000 gas, not 21,000, so never hard-code 21,000 for a transfer; let the wallet estimate.
+
 
 ```solidity
 event Completed(address indexed learner, uint8 indexed week, uint256 timestamp);

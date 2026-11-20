@@ -68,7 +68,7 @@ What is public: the wallet address, the week number and the block time. Names an
 | Network | Ethereum Sepolia testnet (chain ID 11155111), agreed for all six weeks in #baby-edu-fa26 |
 | Contract | `BabEduCompletions` at `0xAAbFe9b00f1c6d18367425D454371198A7a0624b` ([Etherscan](https://sepolia.etherscan.io/address/0xAAbFe9b00f1c6d18367425D454371198A7a0624b)) |
 | Source | `contracts/BabEduCompletions.sol` (Solidity 0.8.28, optimizer 200 runs) |
-| Test completion | HW_TEST_TX_LINK |
+| Test completion | [0x52532bb5a3815ae0a689ad6a3b61242ffeac0353046b965acf9c96f1bd18aa75](https://sepolia.etherscan.io/tx/0x52532bb5a3815ae0a689ad6a3b61242ffeac0353046b965acf9c96f1bd18aa75) (block 12,173,472, November 20, 2026; made through the published molab link with a test wallet; gas 127,826, about 0.00013 test ETH) |
 
 See `contracts/README.md` for the interface and how another week plugs in.
 

@@ -3982,7 +3982,7 @@ def _(HW_CONTRACT, hw_a, hw_name, hw_ok1, hw_ok2, hw_ok3, hw_wallet, mo):
 
     {"**All done, " + _who + ".** Record it below." if hw_ready else "The record button turns on when every box is ticked."}
 
-    **What the transaction makes public, forever:** your wallet address, the number 1 (this week) and the block time. It calls `recordCompletion(1)` on the shared [B@B completion contract](https://sepolia.etherscan.io/address/{HW_CONTRACT}#code) on Sepolia. Your name, code and answers are not in it.
+    **What the transaction makes public, forever:** your wallet address, the number 1 (this week) and the block time. It calls `recordCompletion(1)` on the shared [B@B completion contract](https://eth-sepolia.blockscout.com/address/{HW_CONTRACT}?tab=contract) (verified source) on Sepolia. Your name, code and answers are not in it.
 
     **What it proves:** the checks above run in your browser, so the record is your claim that you finished Week 1, not independent proof that every answer was right. Each wallet can record each week once; if yours already has, the notebook says so instead of sending another transaction.
 

@@ -34,4 +34,4 @@ Same test, with a stand-in browser wallet backed by a local Ethereum test chain 
 
 ## Live on Sepolia
 
-- Test completion through the published notebook: HW_TEST_TX_LINK
+- Test completion through the published notebook: [0x52532bb5a3815ae0a689ad6a3b61242ffeac0353046b965acf9c96f1bd18aa75](https://sepolia.etherscan.io/tx/0x52532bb5a3815ae0a689ad6a3b61242ffeac0353046b965acf9c96f1bd18aa75) (block 12,173,472, November 20, 2026; made through the published molab link with a test wallet; gas 127,826, about 0.00013 test ETH)
