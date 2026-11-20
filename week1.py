@@ -91,29 +91,72 @@ def _(hashlib, mo):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _(anywidget, mo, traitlets):
+    # Sidebar menu. It scrolls to each heading itself instead of using "#id" links:
+    # on molab the notebook page sets a <base> address, so a plain "#id" link
+    # resolves to another URL and opens "Page not found" (mo.nav_menu did that).
+    class _SectionNav(anywidget.AnyWidget):
+        _esm = r"""
+        function render({ model, el }) {
+          const nav = document.createElement("nav");
+          const links = model.get("items").map(([id, label]) => {
+            const a = document.createElement("a");
+            a.textContent = label;
+            a.href = "#" + id;
+            a.addEventListener("click", (e) => {
+              e.preventDefault();
+              const target = document.getElementById(id);
+              if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+            });
+            nav.append(a);
+            return [id, a];
+          });
+          el.append(nav);
+          // Highlight the section being read: the last heading above the top third of the screen.
+          const mark = () => {
+            let current = null;
+            for (const [id, a] of links) {
+              const t = document.getElementById(id);
+              if (t && t.getBoundingClientRect().top < window.innerHeight / 3) current = a;
+            }
+            links.forEach(([, a]) => a.classList.toggle("active", a === current));
+          };
+          document.addEventListener("scroll", mark, { capture: true, passive: true });
+          const timer = setInterval(mark, 1000);
+          mark();
+          return () => { document.removeEventListener("scroll", mark, { capture: true }); clearInterval(timer); };
+        }
+        export default { render };
+        """
+        _css = """
+        nav { display: flex; flex-direction: column; gap: 2px; }
+        a { display: block; padding: 8px 12px; border-radius: 8px; color: inherit; text-decoration: none;
+             font-size: 0.9rem; line-height: 1.3; }
+        a:hover { background: rgba(127,127,127,0.12); }
+        a.active { background: var(--blue-3, rgba(59,130,246,0.12)); color: var(--blue-11, #0b68cb); }
+        """
+        items = traitlets.List([]).tag(sync=True)
+
+    _sections = [
+        ("learning-objectives", "Learning objectives"),
+        ("first-lecture-woooo", "First lecture!"),
+        ("cryptography-101", "Cryptography 101"),
+        ("hash-functions", "Hash functions"),
+        ("examples-of-asymmetric-encryption", "Asymmetric encryption"),
+        ("digital-signatures", "Digital signatures"),
+        ("elliptic-curve-cryptography-ecc", "Elliptic curves"),
+        ("bitcoin-an-introduction-to-blockchain", "Bitcoin"),
+        ("mining-and-proof-of-work", "Mining"),
+        ("from-a-chain-to-a-network", "The network"),
+        ("properties-of-bitcoin", "Properties of Bitcoin"),
+        ("key-takeaways", "Key takeaways"),
+        ("homework", "Homework"),
+        ("sources", "Sources"),
+    ]
     mo.sidebar(
         [
             mo.md("**Week 1**  \nFundamentals and Bitcoin"),
-            mo.nav_menu(
-                {
-                    "#learning-objectives": "Learning objectives",
-                    "#first-lecture-woooo": "First lecture!",
-                    "#cryptography-101": "Cryptography 101",
-                    "#hash-functions": "Hash functions",
-                    "#examples-of-asymmetric-encryption": "Asymmetric encryption",
-                    "#digital-signatures": "Digital signatures",
-                    "#elliptic-curve-cryptography-ecc": "Elliptic curves",
-                    "#bitcoin-an-introduction-to-blockchain": "Bitcoin",
-                    "#mining-and-proof-of-work": "Mining",
-                    "#from-a-chain-to-a-network": "The network",
-                    "#properties-of-bitcoin": "Properties of Bitcoin",
-                    "#key-takeaways": "Key takeaways",
-                    "#homework": "Homework",
-                    "#sources": "Sources",
-                },
-                orientation="vertical",
-            ),
+            _SectionNav(items=_sections),
         ]
     )
     return
