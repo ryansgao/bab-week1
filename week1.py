@@ -92,7 +92,7 @@ def _(hashlib, mo):
 
 @app.cell(hide_code=True)
 def _(anywidget, mo, traitlets):
-    # Sidebar menu. It scrolls to each heading itself instead of using "#id" links:
+    # Sidebar menu. Buttons that scroll to each heading, not "#id" links:
     # on molab the notebook page sets a <base> address, so a plain "#id" link
     # resolves to another URL and opens "Page not found" (mo.nav_menu did that).
     class _SectionNav(anywidget.AnyWidget):
@@ -100,11 +100,13 @@ def _(anywidget, mo, traitlets):
         function render({ model, el }) {
           const nav = document.createElement("nav");
           const links = model.get("items").map(([id, label]) => {
-            const a = document.createElement("a");
+            const a = document.createElement("button");
+            a.type = "button";
             a.textContent = label;
-            a.href = "#" + id;
+            a.dataset.target = id;
             a.addEventListener("click", (e) => {
               e.preventDefault();
+              e.stopPropagation();
               const target = document.getElementById(id);
               if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
             });
@@ -130,10 +132,11 @@ def _(anywidget, mo, traitlets):
         """
         _css = """
         nav { display: flex; flex-direction: column; gap: 2px; }
-        a { display: block; padding: 8px 12px; border-radius: 8px; color: inherit; text-decoration: none;
-             font-size: 0.9rem; line-height: 1.3; }
-        a:hover { background: rgba(127,127,127,0.12); }
-        a.active { background: var(--blue-3, rgba(59,130,246,0.12)); color: var(--blue-11, #0b68cb); }
+        button { display: block; width: 100%; text-align: left; padding: 8px 12px; border: 0; border-radius: 8px;
+                  background: transparent; color: inherit; font: inherit; font-size: 0.9rem; line-height: 1.3; cursor: pointer; }
+        button:hover { background: rgba(127,127,127,0.12); }
+        button:focus-visible { outline: 2px solid var(--blue-8, #3b82f6); outline-offset: 1px; }
+        button.active { background: var(--blue-3, rgba(59,130,246,0.12)); color: var(--blue-11, #0b68cb); }
         """
         items = traitlets.List([]).tag(sync=True)
 
