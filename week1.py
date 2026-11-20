@@ -26,7 +26,9 @@ def _():
     import numpy as np
     import pandas as pd
     import altair as alt
-    return alt, hashlib, math, mo, np, pd, random, string, time
+    import anywidget
+    import traitlets
+    return alt, anywidget, hashlib, math, mo, np, pd, random, string, time, traitlets
 
 
 @app.cell(hide_code=True)
@@ -118,14 +120,13 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
-def _(mo):
+def _(anywidget, mo):
     # Page styling and the dark-mode switch.
     # The CSS lifts marimo's 610 px cap on cell outputs, so long outputs show in
     # full with no inner scroll box. (App(css_file=...) would do the same when run
     # locally, but the molab/marimo.app WebAssembly link never loads that file.)
     # The switch flips marimo's own theme through the data-vscode-theme-kind
     # attribute on <body>, which marimo watches; charts and widgets follow it.
-    import anywidget
 
     _page_css = """
     <style>
@@ -2995,10 +2996,1009 @@ def _(mo):
     If the week worked, you can now explain to a friend why a 256-bit hash gives only 128 bits of collision resistance, why HTTPS uses public-key cryptography only for the handshake, and why a wallet signs a transaction instead of encrypting it. You can also say why nodes follow the chain with the most work rather than the most blocks, and tell them what a miner with 60% of the hashrate can and can't do to their coins.
 
     Next week covers consensus and distributed systems, including light clients and what happens when nodes disagree.
+    """)
+    return
 
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     # Homework
 
-    *Coming soon.* The homework will take about 30 minutes: guided coding where you rebuild the Merkle root and header hash of a real Bitcoin block, a few short questions on this week, and a final step that records your completion on a public testnet. You won't need real funds.
+    About 30 minutes, in three parts:
+
+    1. **Guided coding (15–20 min).** Rebuild the Merkle root and the block hash of a real Bitcoin block, block 100,000 from December 2010, and check them against the real values.
+    2. **Six short questions (5–10 min)** on the rest of the week. Feedback appears as soon as you answer.
+    3. **Record your completion (a few minutes).** One free transaction on the Sepolia test network says that your wallet finished Week 1.
+
+    **What is stored where**
+
+    | What | Where | Who can see it |
+    | :--- | :--- | :--- |
+    | Your name, your code and your answers | Only this browser (its local storage) | Only you, on this device |
+    | Wallet address, week number (1) and the time | The Sepolia testnet, in the shared B@B completion contract | Anyone |
+
+    Your progress saves as you go, so a refresh or a failed transaction never sends you back to the start. Clearing your browser data, or opening the notebook in another browser, starts fresh. Nothing here asks for real money, a private key or a seed phrase; if anything ever does, stop.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(anywidget, mo, traitlets):
+    # Progress store, part 1 (loader). On first render the browser reads the saved
+    # homework from localStorage and hands it to Python once; the homework inputs
+    # are then rebuilt from it. "Start over" clears it. Saving is done by the
+    # hw_saver widget further down, which never feeds back into this one, so
+    # typing never rebuilds the editors.
+    _aw, _tl = anywidget, traitlets
+
+    class _HwLoader(_aw.AnyWidget):
+        _esm = r"""
+        const KEY = "bab-edu-week1-homework-v1";
+        function render({ model, el }) {
+          let saved = {};
+          try { saved = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) { saved = {}; }
+          if (!model.get("ready")) {
+            model.set("loaded", saved);
+            model.set("ready", true);
+            model.save_changes();
+          }
+          const row = document.createElement("div");
+          row.className = "row";
+          const text = document.createElement("span");
+          const when = saved && saved.saved_at ? new Date(saved.saved_at) : null;
+          text.textContent = when
+            ? "Progress restored from this browser (last saved " + when.toLocaleString() + ")."
+            : "Progress saves in this browser as you work.";
+          const btn = document.createElement("button");
+          btn.textContent = "Start over";
+          btn.addEventListener("click", () => {
+            if (!confirm("Clear your saved name, code and answers on this device? Your onchain record, if any, stays.")) return;
+            localStorage.removeItem(KEY);
+            model.set("loaded", {});
+            model.set("generation", model.get("generation") + 1);
+            model.save_changes();
+            text.textContent = "Cleared. Starting fresh.";
+          });
+          row.append(text, btn);
+          el.append(row);
+        }
+        export default { render };
+        """
+        _css = """
+        .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 0.875rem; opacity: 0.85; }
+        button { font: inherit; padding: 2px 10px; border-radius: 6px; cursor: pointer;
+                 border: 1px solid rgba(127,127,127,0.45); background: transparent; color: inherit; }
+        """
+        loaded = _tl.Dict({}).tag(sync=True)
+        ready = _tl.Bool(False).tag(sync=True)
+        generation = _tl.Int(0).tag(sync=True)
+
+    class _HwSaver(_aw.AnyWidget):
+        _esm = r"""
+        const KEY = "bab-edu-week1-homework-v1";
+        function render({ model, el }) {
+          const data = Object.assign({}, model.get("saved"), { saved_at: new Date().toISOString() });
+          try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {}
+        }
+        export default { render };
+        """
+        saved = _tl.Dict({}).tag(sync=True)
+
+    hw_loader = mo.ui.anywidget(_HwLoader())
+    hw_saver_cls = _HwSaver
+    hw_loader
+    return hw_loader, hw_saver_cls
+
+
+@app.cell(hide_code=True)
+def _(hw_loader, mo):
+    # Wait for the browser to report saved progress, then pass it on once.
+    mo.stop(not hw_loader.value.get("ready"), mo.md("*Loading your saved progress…*"))
+    hw_restored = dict(hw_loader.value.get("loaded") or {})
+    hw_generation = hw_loader.value.get("generation", 0)
+    return hw_generation, hw_restored
+
+
+@app.cell(hide_code=True)
+def _(anywidget, mo, traitlets):
+    # Wallet widget: connects through the learner's own browser wallet (EIP-1193),
+    # switches it to Sepolia, reads the completion contract, and sends the one
+    # recordCompletion(1) transaction only after the learner presses the button and
+    # approves it in the wallet. The pending transaction hash is kept in
+    # localStorage, so a refresh resumes waiting for it instead of sending twice.
+    _aw, _tl = anywidget, traitlets
+
+    HW_CHAIN_ID = 11155111  # Sepolia
+    HW_CONTRACT = "0xAAbFe9b00f1c6d18367425D454371198A7a0624b"  # BabEduCompletions on Sepolia
+    HW_WEEK = 1
+
+    class _HwWallet(_aw.AnyWidget):
+        _esm = r"""
+        const SEPOLIA = "0xaa36a7";
+        const EXPLORER = "https://sepolia.etherscan.io";
+        const SEL_RECORD = "0xfd9e6188";   // recordCompletion(uint8)
+        const SEL_DONE = "0x607544a3";     // completedAt(address,uint8)
+        const pad = (hex) => hex.replace(/^0x/, "").toLowerCase().padStart(64, "0");
+        const short = (a) => a.slice(0, 6) + "…" + a.slice(-4);
+        const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+        function findProvider() {
+          return new Promise((resolve) => {
+            const found = [];
+            const onAnnounce = (e) => found.push(e.detail);
+            window.addEventListener("eip6963:announceProvider", onAnnounce);
+            window.dispatchEvent(new Event("eip6963:requestProvider"));
+            setTimeout(() => {
+              window.removeEventListener("eip6963:announceProvider", onAnnounce);
+              if (found.length) resolve(found[0].provider);
+              else resolve(window.ethereum || null);
+            }, 400);
+          });
+        }
+
+        function explain(err) {
+          const code = err && (err.code ?? (err.data && err.data.code));
+          const msg = (err && (err.message || String(err))) || "unknown error";
+          if (code === 4001) return "You rejected the request in your wallet. Nothing was sent. Press the button again when you are ready.";
+          if (code === -32002) return "Your wallet already has a request waiting. Open the wallet and approve or reject it, then try again.";
+          if (/insufficient funds/i.test(msg)) return "Your wallet has no Sepolia ETH to pay the fee. Get free test ETH from a faucet (setup steps above), then try again.";
+          if (/already recorded/i.test(msg)) return "This wallet has already recorded Week 1.";
+          return "The wallet reported an error: " + msg + ". Nothing was recorded; you can try again.";
+        }
+
+        function render({ model, el }) {
+          const mode = model.get("mode");
+          const week = model.get("week");
+          const contract = model.get("contract").toLowerCase();
+          const KEY = "bab-edu-completion-" + contract + "-week" + week;
+          const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) { return {}; } };
+          const store = (patch) => { const s = Object.assign(load(), patch); localStorage.setItem(KEY, JSON.stringify(s)); return s; };
+
+          const box = document.createElement("div"); box.className = "box";
+          const status = document.createElement("div"); status.className = "status";
+          const buttons = document.createElement("div"); buttons.className = "buttons";
+          const connectBtn = document.createElement("button"); connectBtn.textContent = "Connect wallet";
+          const recordBtn = document.createElement("button"); recordBtn.textContent = "Record my Week 1 completion";
+          recordBtn.className = "primary";
+          buttons.append(connectBtn);
+          if (mode === "record") buttons.append(recordBtn);
+          const detail = document.createElement("div"); detail.className = "detail";
+          box.append(status, buttons, detail);
+          el.append(box);
+
+          let provider = null, account = null, busy = false, recordedAt = 0, balance = null, onSepolia = false;
+          const say = (html, kind) => { status.innerHTML = html; status.dataset.kind = kind || ""; };
+
+          async function rpc(method, params) { return provider.request({ method, params: params || [] }); }
+
+          async function ensureSepolia() {
+            const id = await rpc("eth_chainId");
+            if (id === SEPOLIA) return true;
+            try {
+              await rpc("wallet_switchEthereumChain", [{ chainId: SEPOLIA }]);
+            } catch (e) {
+              if (e && e.code === 4902) {
+                await rpc("wallet_addEthereumChain", [{ chainId: SEPOLIA, chainName: "Sepolia",
+                  nativeCurrency: { name: "Sepolia Ether", symbol: "ETH", decimals: 18 },
+                  rpcUrls: ["https://ethereum-sepolia-rpc.publicnode.com"], blockExplorerUrls: [EXPLORER] }]);
+              } else { throw e; }
+            }
+            return (await rpc("eth_chainId")) === SEPOLIA;
+          }
+
+          async function readState() {
+            onSepolia = (await rpc("eth_chainId")) === SEPOLIA;
+            if (!onSepolia || !account) return;
+            const out = await rpc("eth_call", [{ to: contract, data: SEL_DONE + pad(account) + pad(week.toString(16)) }, "latest"]);
+            recordedAt = parseInt(out, 16) || 0;
+            balance = BigInt(await rpc("eth_getBalance", [account, "latest"]));
+          }
+
+          function txLink(h) { return '<a href="' + EXPLORER + "/tx/" + h + '" target="_blank" rel="noopener">' + h.slice(0, 10) + "…" + h.slice(-8) + "</a>"; }
+
+          function paint() {
+            const ready = model.get("ready");
+            const saved = load();
+            connectBtn.style.display = account ? "none" : "";
+            recordBtn.disabled = busy || !ready || recordedAt > 0;
+            detail.textContent = "";
+            if (!provider) {
+              say("No browser wallet found on this page. Install MetaMask (steps in “Set up a wallet”), then reload. "
+                + "If you have one and still see this, open the notebook in its own browser tab.", "warn");
+              connectBtn.disabled = true; recordBtn.disabled = true; return;
+            }
+            if (!account) {
+              say("Not connected. Connecting only shares your address with this page; it sends nothing."
+                + (mode === "record" && ready ? " The record button connects too." : ""), "");
+              return;
+            }
+            if (recordedAt > 0) {
+              const t = new Date(recordedAt * 1000).toLocaleString();
+              const link = saved.tx && saved.account === account ? " Transaction: " + txLink(saved.tx) + "." : ' <a href="' + EXPLORER + "/address/" + account + '" target="_blank" rel="noopener">See your wallet on Etherscan</a>.';
+              say("✅ Week " + week + " is recorded onchain for " + short(account) + " (" + t + ")." + link, "ok");
+              return;
+            }
+            if (saved.pending && saved.account === account) { say("⏳ Waiting for your transaction " + txLink(saved.pending) + " to be included in a block…", ""); return; }
+            if (!onSepolia) { say("Connected as " + short(account) + ", but your wallet is on another network. Pressing the record button switches it to Sepolia.", "warn"); return; }
+            let line = "Connected as " + short(account) + " on Sepolia.";
+            if (balance !== null && balance === 0n) line += " This wallet has no Sepolia ETH yet: get some from a faucet before recording (see “Set up a wallet”).";
+            if (mode === "record" && !ready) line += " The record button turns on once the checklist above is complete.";
+            say(line, balance === 0n ? "warn" : "");
+          }
+
+          async function waitFor(hash) {
+            for (let i = 0; i < 120; i++) {
+              let r = null;
+              try { r = await rpc("eth_getTransactionReceipt", [hash]); } catch (e) {}
+              if (r && r.status) {
+                if (r.status === "0x1") { store({ pending: null, tx: hash, account }); await readState(); return true; }
+                store({ pending: null, failed: hash });
+                say("❌ The transaction " + txLink(hash) + " failed onchain, so nothing was recorded. You can press the button to try again.", "err");
+                return false;
+              }
+              await sleep(3000);
+            }
+            say("⏳ Still waiting for " + txLink(hash) + ". Testnets are sometimes slow. You can leave this open, or reload later: the page keeps checking this transaction and will not send a second one.", "warn");
+            return null;
+          }
+
+          async function refresh() {
+            if (!provider) { paint(); return; }
+            try {
+              const accs = await rpc("eth_accounts");
+              account = accs && accs.length ? accs[0].toLowerCase() : null;
+              await readState();
+            } catch (e) { detail.textContent = explain(e); }
+            paint();
+            const saved = load();
+            if (account && saved.pending && saved.account === account && !busy && recordedAt === 0) {
+              busy = true; paint();
+              const ok = await waitFor(saved.pending);
+              busy = false;
+              if (ok) paint();
+              else if (ok === false) recordBtn.disabled = !model.get("ready");
+            }
+          }
+
+          connectBtn.addEventListener("click", async () => {
+            try {
+              const accs = await rpc("eth_requestAccounts");
+              account = accs[0].toLowerCase();
+              await ensureSepolia();
+              await readState();
+            } catch (e) { paint(); detail.textContent = explain(e); return; }
+            paint();
+          });
+
+          recordBtn.addEventListener("click", async () => {
+            if (busy) return;
+            busy = true; paint();
+            try {
+              const accs = await rpc("eth_requestAccounts");
+              account = accs[0].toLowerCase();
+              if (!(await ensureSepolia())) throw new Error("Your wallet did not switch to Sepolia");
+              await readState();
+              if (recordedAt > 0) { busy = false; paint(); return; }
+              if (balance === 0n) throw new Error("insufficient funds");
+              say("Approve the transaction in your wallet. It calls recordCompletion(" + week + ") on the B@B completion contract; the fee is paid in free Sepolia ETH.", "");
+              const hash = await rpc("eth_sendTransaction", [{ from: account, to: contract, data: SEL_RECORD + pad(week.toString(16)) }]);
+              store({ pending: hash, account });
+              say("⏳ Sent " + txLink(hash) + ". Waiting for it to be included in a block (usually under 30 seconds)…", "");
+              const ok = await waitFor(hash);
+              busy = false;
+              if (ok) paint();
+              else if (ok === false) recordBtn.disabled = !model.get("ready");
+            } catch (e) {
+              busy = false; paint(); detail.textContent = explain(e);
+            }
+          });
+
+          (async () => {
+            provider = await findProvider();
+            if (provider && provider.on) {
+              provider.on("accountsChanged", () => refresh());
+              provider.on("chainChanged", () => refresh());
+            }
+            refresh();
+          })();
+          // The other wallet box on the page may connect first: notice it without a reload.
+          const timer = setInterval(() => { if (provider && !account && !busy) refresh(); }, 4000);
+          window.addEventListener("focus", refresh);
+          return () => { clearInterval(timer); window.removeEventListener("focus", refresh); };
+        }
+        export default { render };
+        """
+        _css = """
+        .box { display: flex; flex-direction: column; gap: 10px; }
+        .status { line-height: 1.5; }
+        .status[data-kind="ok"] { color: var(--grass-11, #18794e); }
+        .status[data-kind="warn"] { color: var(--amber-11, #ad5700); }
+        .status[data-kind="err"] { color: var(--red-11, #cd2b31); }
+        .detail { font-size: 0.9rem; color: var(--red-11, #cd2b31); }
+        .buttons { display: flex; gap: 10px; flex-wrap: wrap; }
+        button { font: inherit; padding: 6px 14px; border-radius: 8px; cursor: pointer;
+                 border: 1px solid rgba(127,127,127,0.5); background: transparent; color: inherit; }
+        button.primary { background: var(--blue-9, #3b82f6); border-color: var(--blue-9, #3b82f6); color: #fff; }
+        button:disabled { opacity: 0.45; cursor: not-allowed; }
+        a { color: var(--blue-11, #0b68cb); }
+        """
+        mode = _tl.Unicode("connect").tag(sync=True)
+        week = _tl.Int(1).tag(sync=True)
+        contract = _tl.Unicode("").tag(sync=True)
+        ready = _tl.Bool(False).tag(sync=True)
+
+    def hw_wallet(mode, ready=False):
+        return _HwWallet(mode=mode, week=HW_WEEK, contract=HW_CONTRACT, ready=ready)
+
+    return HW_CHAIN_ID, HW_CONTRACT, HW_WEEK, hw_wallet
+
+
+@app.cell(hide_code=True)
+def _(HW_CONTRACT, hw_generation, hw_restored, hw_wallet, mo):
+    _ = hw_generation
+    hw_name = mo.ui.text(
+        value=hw_restored.get("name", ""),
+        label="Your name",
+        placeholder="First and last name",
+        full_width=True,
+    )
+    _setup = mo.accordion(
+        {
+            "Set up a wallet (about 5 minutes, only once)": mo.md(f"""
+    You need a browser wallet and a little free test ETH. Sepolia is Ethereum's main public test network: it works like Ethereum, but its ETH has no value and is handed out free by faucets.
+
+    1. **Install MetaMask** from [metamask.io/download](https://metamask.io/download/) (Chrome, Brave, Firefox or Edge). Create a new wallet and write the recovery phrase down on paper. Never type it into a website, this notebook included.
+    2. **Show test networks:** in MetaMask, open the network menu and turn on *Show test networks*. You don't have to pick Sepolia yourself: the notebook asks your wallet to switch.
+    3. **Get free Sepolia ETH** for your address (copy it from MetaMask). Recording costs well under 0.001 test ETH, so any faucet amount is plenty. Two that need no mainnet balance (checked November 2026):
+        - [Google Cloud Web3 faucet](https://cloud.google.com/application/web3/faucet/ethereum/sepolia): sign in with a Google account; 0.05 Sepolia ETH a day.
+        - [Sepolia PoW faucet](https://sepolia-faucet.pk910.de/): no account; your browser does a few minutes of work, then claims.
+    4. **Reload this page** if you installed MetaMask while it was open, then press **Connect wallet** below.
+
+    The completion contract is [`{HW_CONTRACT}`](https://sepolia.etherscan.io/address/{HW_CONTRACT}) on Sepolia (chain ID 11155111), shared by all six weeks.
+    """),
+        }
+    )
+    mo.vstack(
+        [
+            mo.md("## Step 1: Your name and wallet"),
+            mo.md("Your name stays in this browser: it personalizes the notebook and is never sent anywhere. The wallet is what gets credited in the public record."),
+            hw_name,
+            _setup,
+            hw_wallet("connect"),
+        ],
+        gap=1,
+    )
+    return (hw_name,)
+
+
+@app.cell(hide_code=True)
+def _(hashlib):
+    # Reference data and checks for the coding tasks. The block data is bundled, so
+    # the homework needs no network. Values from Bitcoin block 100,000 (block
+    # explorers and the Bitcoin developer reference agree; the checks below
+    # recompute both the Merkle root and the block hash from these fields).
+    import struct
+    import traceback
+
+    HW_BLOCK = {
+        "height": 100000,
+        "hash": "000000000003ba27aa200b1cecaad478d2b00432346c3f1f3986da1afd33e506",
+        "version": 1,
+        "prev_hash": "000000000002d01c1fccc21636b607dfd930d31d01c3a62104612a1719011250",
+        "merkle_root": "f3e94742aca4b5ef85488dc37c06c3282295ffec960994b2c0d5ac2a25a95766",
+        "time": 1293623863,
+        "bits": 0x1B04864C,
+        "nonce": 274148111,
+        "txids": [
+            "8c14f0db3df150123e6f3dbbf30f8b955a8249b62ac1d1ff16284aefa3d06d87",
+            "fff2525b8931402dd09222c50775608f75787bd2b87e56995a7bdd30f79702c4",
+            "6359f0868171b1d194cbee1af2f16ea598ae8fad666d9b012c8ed2b79a236ec4",
+            "e9a66845e05d5abc0ad04ec80f774a7e585c6e8db975962d069a522137b80c1d",
+        ],
+    }
+
+    def _d(b):
+        return hashlib.sha256(hashlib.sha256(b).digest()).digest()
+
+    def _s(b):
+        return hashlib.sha256(b).digest()
+
+    def _ref_merkle(txids, rev_in=True, rev_out=True, double=True, odd="dup"):
+        h = [bytes.fromhex(t)[::-1] if rev_in else bytes.fromhex(t) for t in txids]
+        f = _d if double else _s
+        while len(h) > 1:
+            if len(h) % 2:
+                if odd == "dup":
+                    h.append(h[-1])
+                elif odd == "carry":
+                    last = h.pop()
+                    h = [f(h[i] + h[i + 1]) for i in range(0, len(h), 2)] + [last]
+                    continue
+                elif odd == "drop":
+                    h.pop()
+            h = [f(h[i] + h[i + 1]) for i in range(0, len(h), 2)]
+        return (h[0][::-1] if rev_out else h[0]).hex()
+
+    def _ref_header(b):
+        return (
+            struct.pack("<I", b["version"])
+            + bytes.fromhex(b["prev_hash"])[::-1]
+            + bytes.fromhex(b["merkle_root"])[::-1]
+            + struct.pack("<III", b["time"], b["bits"], b["nonce"])
+        )
+
+    def hw_run(code, ns=None):
+        """Run the learner's code in a fresh namespace. Returns (namespace, error text)."""
+        env = {"hashlib": hashlib, "struct": struct, "__name__": "homework"}
+        env.update(ns or {})
+        try:
+            exec(compile(code, "<your code>", "exec"), env)
+        except Exception as e:
+            return None, _explain_error(e)
+        return env, None
+
+    def _explain_error(e):
+        tb = traceback.extract_tb(e.__traceback__)
+        line = next((f.lineno for f in reversed(tb) if f.filename == "<your code>"), None)
+        where = f" (line {line} of your code)" if line else ""
+        return f"Your code raised `{type(e).__name__}: {e}`{where}."
+
+    def _call(fn, *args):
+        try:
+            return fn(*args), None
+        except Exception as e:
+            return None, _explain_error(e)
+
+    def hw_check_sha256d(ns):
+        fn = ns.get("sha256d")
+        if not callable(fn):
+            return False, ["Define a function called `sha256d`."]
+        out, err = _call(fn, b"hello")
+        if err:
+            return False, [err]
+        if out is None or (isinstance(out, bytes) and out == b""):
+            return False, ["`sha256d` doesn't return anything yet. Replace the placeholder `return b\"\"`."]
+        if isinstance(out, str):
+            if out == _d(b"hello").hex():
+                return False, ["Right hash, wrong type: return raw bytes (`.digest()`), not a hex string (`.hexdigest()`). The next tasks glue hashes together as bytes."]
+            return False, ["Return raw bytes (`.digest()`), not a string."]
+        if out == _s(b"hello"):
+            return False, ["That's a single SHA-256. Bitcoin hashes twice: SHA-256 of the SHA-256 digest (the 32 raw bytes, not the hex text)."]
+        if out == hashlib.sha256(hashlib.sha256(b"hello").hexdigest().encode()).digest():
+            return False, ["Close: the second hash must take the first hash's raw bytes (`.digest()`), not its hex text."]
+        if out != _d(b"hello"):
+            return False, ["The output doesn't match double SHA-256 of `b\"hello\"`. Check that you hash `data` itself, twice."]
+        if _call(fn, b"")[0] != _d(b""):
+            return False, ["Works for `b\"hello\"` but not for empty input `b\"\"`."]
+        return True, ["`sha256d(b\"hello\")` = `" + out.hex()[:16] + "…`, matching the reference value."]
+
+    def hw_check_merkle(ns):
+        fn = ns.get("merkle_root")
+        if not callable(fn):
+            return False, ["Define a function called `merkle_root`."]
+        tx = HW_BLOCK["txids"]
+        out, err = _call(fn, tx[:1])
+        if err:
+            return False, [err]
+        if not isinstance(out, str):
+            return False, [f"Return the root as a hex string (got `{type(out).__name__}`). Use `.hex()` on the final bytes."]
+        if out == bytes.fromhex(tx[0])[::-1].hex():
+            return False, ["For a one-transaction block the root comes out byte-reversed. Reverse the final 32 bytes before `.hex()`: explorers display hashes in the reverse of the order they're hashed in."]
+        if out != tx[0]:
+            return False, ["A block with one transaction has that transaction's txid as its Merkle root. Your function returned something else for a one-item list: the loop should stop when one hash is left, without hashing it again."]
+        out4, err = _call(fn, tx)
+        if err:
+            return False, [err]
+        if out4 != HW_BLOCK["merkle_root"]:
+            for kw, why in [
+                ({"rev_out": False}, "the root comes out byte-reversed. Reverse the final 32 bytes before `.hex()`: explorers display hashes in the reverse of the order they're hashed in."),
+                ({"rev_in": False, "rev_out": False}, "you hashed the txids in display order. Convert each with `bytes.fromhex(t)[::-1]` first, and reverse the final result back."),
+                ({"double": False}, "you used a single SHA-256 to combine pairs. Use your `sha256d`."),
+            ]:
+                if out4 == _ref_merkle(tx, **kw):
+                    return False, ["Block 100,000 doesn't match: " + why]
+            return False, ["Block 100,000's root doesn't match. Expected `" + HW_BLOCK["merkle_root"][:16] + "…`, got `" + str(out4)[:16] + "…`. Check byte order on the way in and out, and that each pair is joined as `left + right` bytes."]
+        out3, err = _call(fn, tx[:3])
+        if err:
+            return False, [err]
+        if out3 != _ref_merkle(tx[:3]):
+            for odd, why in [("carry", "you carried the odd hash up unhashed."), ("drop", "you dropped the odd hash.")]:
+                if out3 == _ref_merkle(tx[:3], odd=odd):
+                    return False, ["Four transactions work, but three don't: " + why + " Bitcoin duplicates the last hash on a level with an odd count and hashes it with itself."]
+            return False, ["Four transactions work, but three don't. On a level with an odd number of hashes, append a copy of the last one before pairing."]
+        return True, [
+            "One transaction: the root is the txid. ✓",
+            "Block 100,000 (4 transactions): `" + out4[:16] + "…`, matching the real header. ✓",
+            "Three transactions (odd level duplicated): ✓",
+        ]
+
+    def hw_check_header(ns):
+        ser, bh = ns.get("serialize_header"), ns.get("block_hash")
+        if not callable(ser) or not callable(bh):
+            return False, ["Define both `serialize_header` and `block_hash`."]
+        b = HW_BLOCK
+        out, err = _call(ser, b["version"], b["prev_hash"], b["merkle_root"], b["time"], b["bits"], b["nonce"])
+        if err:
+            return False, [err]
+        if not isinstance(out, (bytes, bytearray)):
+            return False, [f"`serialize_header` should return bytes (got `{type(out).__name__}`)."]
+        out = bytes(out)
+        want = _ref_header(b)
+        if len(out) != 80:
+            return False, [f"The header is {len(out)} bytes; it must be exactly 80 (4 + 32 + 32 + 4 + 4 + 4). " + ("Did you add a hash as hex text instead of `bytes.fromhex(...)`?" if len(out) > 80 else "")]
+        if out != want:
+            fields = [("version", 0, 4), ("previous block hash", 4, 36), ("Merkle root", 36, 68), ("time", 68, 72), ("bits", 72, 76), ("nonce", 76, 80)]
+            msgs = []
+            for name, a, z in fields:
+                if out[a:z] != want[a:z]:
+                    if out[a:z] == want[a:z][::-1]:
+                        msgs.append(f"**{name}** (bytes {a}–{z - 1}) is byte-reversed: " + ("use `bytes.fromhex(h)[::-1]`." if z - a == 32 else "pack integers little-endian with `struct.pack('<I', x)`."))
+                    elif any(out[a:z] == want[c:d] for _, c, d in fields if (c, d) != (a, z)):
+                        msgs.append(f"**{name}** (bytes {a}–{z - 1}) holds a different field: check the field order.")
+                    else:
+                        msgs.append(f"**{name}** (bytes {a}–{z - 1}) is wrong.")
+            return False, ["The 80 bytes don't match the real header."] + msgs
+        h, err = _call(bh, out)
+        if err:
+            return False, [err]
+        if not isinstance(h, str):
+            return False, ["`block_hash` should return a hex string."]
+        if h == _d(want).hex():
+            return False, ["Right hash, wrong byte order: reverse the 32 bytes before `.hex()`, as block explorers do."]
+        if h == _s(want)[::-1].hex() or h == _s(want).hex():
+            return False, ["That's a single SHA-256. A block hash is double SHA-256 of the header."]
+        if h != b["hash"]:
+            return False, ["The header bytes are right, but the hash isn't. `block_hash` should return `sha256d(header)` reversed, as hex."]
+        return True, [
+            "Header: 80 bytes, every field in the right place and byte order. ✓",
+            "Block hash: `" + h + "`, exactly block 100,000's hash. ✓",
+            f"It starts with {len(h) - len(h.lstrip('0'))} hex zeros: that's the proof of work you studied above.",
+        ]
+
+    def hw_check_target(ns):
+        fn = ns.get("meets_target")
+        if not callable(fn):
+            return None, ["Define `meets_target` to try the bonus."]
+        good, err = _call(fn, HW_BLOCK["hash"], HW_BLOCK["bits"])
+        if err:
+            return False, [err]
+        bad, err = _call(fn, "0000000000ff" + "f" * 52, HW_BLOCK["bits"])
+        if err:
+            return False, [err]
+        if good is True and bad is False:
+            t = (HW_BLOCK["bits"] & 0xFFFFFF) * 256 ** ((HW_BLOCK["bits"] >> 24) - 3)
+            return True, [f"Block 100,000 meets its target, and a hash just above it doesn't. Target = `{t:064x}`."]
+        return False, ["Expected `True` for block 100,000 and `False` for a hash above its target. Target = mantissa × 256^(exponent − 3), and a valid hash is ≤ target as a number."]
+
+    return (
+        HW_BLOCK,
+        hw_check_header,
+        hw_check_merkle,
+        hw_check_sha256d,
+        hw_check_target,
+        hw_run,
+    )
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    def hw_task_result(ok, msgs):
+        if ok is None:
+            return mo.md("*" + " ".join(msgs) + "*")
+        head = "**Passed.**" if ok else "**Not yet.**"
+        body = "\n".join(f"- {m}" for m in msgs)
+        return mo.callout(mo.md(head + "\n\n" + body), kind="success" if ok else "danger")
+
+    def hw_hints(*levels):
+        return mo.accordion({f"Hint {i + 1}": mo.md(h) for i, h in enumerate(levels)})
+
+    return hw_hints, hw_task_result
+
+
+@app.cell(hide_code=True)
+def _(hw_generation, hw_restored, mo):
+    _ = hw_generation
+    _starter1 = '''def sha256d(data: bytes) -> bytes:
+    """Bitcoin's double SHA-256: the SHA-256 of the SHA-256 of data.
+    Return the 32 raw bytes of the result."""
+    # Your code here. hashlib is already imported.
+    return b""
+'''
+    _starter2 = '''def merkle_root(txids: list[str]) -> str:
+    """Merkle root of a block, from its txids as block explorers show them (hex).
+
+    1. Turn each txid into bytes and reverse them (explorers show hashes reversed).
+    2. While more than one hash is left: if the count is odd, append a copy of the
+       last hash; then replace each pair (a, b) with sha256d(a + b).
+    3. Reverse the last hash back and return it as hex.
+    """
+    # Your code here. Your sha256d from Task 1 is available.
+    return ""
+'''
+    _starter3 = '''def serialize_header(version, prev_hash, merkle_root, time, bits, nonce) -> bytes:
+    """The 80-byte block header, in this order:
+    version (4 bytes), previous block hash (32), Merkle root (32),
+    time (4), bits (4), nonce (4).
+    Integers are little-endian: struct.pack("<I", x).
+    The two hashes arrive as explorer-style hex, so reverse their bytes."""
+    # Your code here.
+    return b""
+
+
+def block_hash(header: bytes) -> str:
+    """The block's hash as explorers show it: sha256d(header), reversed, as hex."""
+    # Your code here.
+    return ""
+'''
+    _starter4 = '''def meets_target(block_hash_hex: str, bits: int) -> bool:
+    """Bonus: decode the compact target in `bits` and check hash <= target.
+    bits = 0xEEMMMMMM: exponent EE, mantissa MMMMMM;
+    target = mantissa * 256 ** (exponent - 3)."""
+    # Your code here.
+    return False
+'''
+    _code = hw_restored.get("code", {})
+
+    def _ed(key, starter):
+        return mo.ui.code_editor(value=_code.get(key, starter), language="python", min_height=140)
+
+    hw_code1 = _ed("t1", _starter1)
+    hw_code2 = _ed("t2", _starter2)
+    hw_code3 = _ed("t3", _starter3)
+    hw_code4 = _ed("t4", _starter4)
+    hw_starters = {"t1": _starter1, "t2": _starter2, "t3": _starter3, "t4": _starter4}
+    return hw_code1, hw_code2, hw_code3, hw_code4, hw_starters
+
+
+@app.cell(hide_code=True)
+def _(hw_code1, hw_hints, mo):
+    mo.vstack(
+        [
+            mo.md(r"""
+    ## Step 2: Guided coding
+
+    You'll rebuild two numbers from [block 100,000](https://mempool.space/block/000000000003ba27aa200b1cecaad478d2b00432346c3f1f3986da1afd33e506) (mined December 29, 2010; 4 transactions) from its raw parts: its **Merkle root** and its **block hash**. If both match the real values, you've done exactly what every full node does when it checks a block.
+
+    Write your code in the editors. Checks run when you click outside an editor, and they say what's wrong if something is. Each task builds on the one before, so later tasks wait until earlier ones pass.
+
+    ### Task 1: Double SHA-256 (about 2 minutes)
+
+    Bitcoin almost never hashes once: block hashes and txids are SHA-256 applied twice. Write `sha256d`.
+    """),
+            hw_code1,
+            hw_hints(
+                "`hashlib.sha256(data).digest()` gives the 32 raw bytes of one SHA-256.",
+                "Feed the first digest straight back in: `hashlib.sha256(hashlib.sha256(data).digest()).digest()`.",
+            ),
+        ],
+        gap=1,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(hw_check_sha256d, hw_code1, hw_run, hw_task_result):
+    _ns, _err = hw_run(hw_code1.value)
+    hw_ok1, _msgs = (False, [_err]) if _err else hw_check_sha256d(_ns)
+    hw_ns1 = _ns if hw_ok1 else None
+    hw_task_result(hw_ok1, _msgs)
+    return hw_ns1, hw_ok1
+
+
+@app.cell(hide_code=True)
+def _(HW_BLOCK, hw_code2, hw_hints, mo):
+    mo.vstack(
+        [
+            mo.md(rf"""
+    ### Task 2: The Merkle root (about 8 minutes)
+
+    The header doesn't list a block's transactions; it commits to all of them through one 32-byte Merkle root (the tree from "A Chain of Blocks"). Block 100,000's four txids are below; the checks also try a one-transaction and a three-transaction block, because odd levels are where most bugs hide.
+
+    ```
+    {chr(10).join(HW_BLOCK["txids"])}
+    ```
+    """),
+            hw_code2,
+            hw_hints(
+                "Start with `level = [bytes.fromhex(t)[::-1] for t in txids]`. Loop `while len(level) > 1:` and build the next level from pairs `level[i] + level[i + 1]` for `i` in `range(0, len(level), 2)`.",
+                "Inside the loop, first `if len(level) % 2 == 1: level.append(level[-1])`. After the loop, return `level[0][::-1].hex()`.",
+            ),
+        ],
+        gap=1,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(hw_check_merkle, hw_code2, hw_ns1, hw_ok1, hw_run, hw_task_result, mo):
+    if not hw_ok1:
+        hw_ok2, hw_ns2 = False, None
+        _out = mo.md("*Task 2 is checked once Task 1 passes.*")
+    else:
+        _ns, _err = hw_run(hw_code2.value, {"sha256d": hw_ns1["sha256d"]})
+        hw_ok2, _msgs = (False, [_err]) if _err else hw_check_merkle(_ns)
+        hw_ns2 = _ns if hw_ok2 else None
+        _out = hw_task_result(hw_ok2, _msgs)
+    _out
+    return hw_ns2, hw_ok2
+
+
+@app.cell(hide_code=True)
+def _(HW_BLOCK, hw_code3, hw_hints, mo):
+    _b = HW_BLOCK
+    mo.vstack(
+        [
+            mo.md(rf"""
+    ### Task 3: The block hash (about 6 minutes)
+
+    A Bitcoin header is 6 fields packed into exactly 80 bytes. Miners change the nonce (and a few other bits) until the double SHA-256 of these 80 bytes falls below the target. Block 100,000's fields:
+
+    | Field | Value | Bytes |
+    | :--- | :--- | :--- |
+    | version | `{_b["version"]}` | 4 |
+    | previous block hash | `{_b["prev_hash"]}` | 32 |
+    | Merkle root | your Task 2 result | 32 |
+    | time | `{_b["time"]}` (Unix seconds: December 29, 2010, 11:57 UTC) | 4 |
+    | bits (the target, compactly) | `{_b["bits"]}` (hex `{_b["bits"]:08x}`) | 4 |
+    | nonce | `{_b["nonce"]}` | 4 |
+
+    Write `serialize_header` to pack them, and `block_hash` to hash the result.
+    """),
+            hw_code3,
+            hw_hints(
+                "`struct.pack('<I', x)` packs an integer into 4 little-endian bytes; `'<III'` packs three at once. A hash goes in as `bytes.fromhex(h)[::-1]`.",
+                "`serialize_header` returns `struct.pack('<I', version) + bytes.fromhex(prev_hash)[::-1] + bytes.fromhex(merkle_root)[::-1] + struct.pack('<III', time, bits, nonce)`. `block_hash` returns `sha256d(header)[::-1].hex()`.",
+            ),
+        ],
+        gap=1,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(hw_check_header, hw_code3, hw_ns2, hw_ok2, hw_run, hw_task_result, mo):
+    if not hw_ok2:
+        hw_ok3, hw_ns3 = False, None
+        _out = mo.md("*Task 3 is checked once Task 2 passes.*")
+    else:
+        _ns, _err = hw_run(hw_code3.value, {"sha256d": hw_ns2["sha256d"], "merkle_root": hw_ns2["merkle_root"]})
+        hw_ok3, _msgs = (False, [_err]) if _err else hw_check_header(_ns)
+        hw_ns3 = _ns if hw_ok3 else None
+        _out = hw_task_result(hw_ok3, _msgs)
+    _out
+    return hw_ns3, hw_ok3
+
+
+@app.cell(hide_code=True)
+def _(hw_check_target, hw_code4, hw_ns3, hw_ok3, hw_run, hw_task_result, mo):
+    if not hw_ok3:
+        _res = mo.md("*Try the bonus after Task 3 passes.*")
+    else:
+        _ns, _err = hw_run(hw_code4.value, {k: hw_ns3[k] for k in ("sha256d", "merkle_root", "serialize_header", "block_hash")})
+        _res = hw_task_result(*((False, [_err]) if _err else hw_check_target(_ns)))
+    mo.accordion(
+        {
+            "Bonus (optional, not needed for completion): was block 100,000 validly mined?": mo.vstack(
+                [
+                    mo.md("Your hash starts with zeros, but the real rule is *hash ≤ target*, where the target is packed into the 4-byte `bits` field. Decode it and check."),
+                    hw_code4,
+                    _res,
+                ]
+            )
+        }
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(hw_generation, hw_restored, mo):
+    _ = hw_generation
+    _a = hw_restored.get("answers", {})
+    _r = lambda k, opts, label: mo.ui.radio(options=opts, value=_a.get(k) if _a.get(k) in opts else None, label=label)
+    hw_q1 = _r(
+        "q1",
+        [
+            "Collision resistance",
+            "Preimage resistance",
+            "The avalanche effect",
+            "Fixed output length",
+        ],
+        "**1.** A site stores SHA-256 hashes of passwords instead of the passwords. Which property stops a thief who steals the hashes from reading the passwords straight back out of them?",
+    )
+    hw_q2 = _r(
+        "q2",
+        [
+            "A trapdoor is easy to compute one way and hard to reverse unless you hold a secret; a hash has no secret that reverses it, for anyone",
+            "Hashes can be reversed with enough memory, so they aren't one-way",
+            "Hash outputs have a fixed length, so they can't encode a secret",
+            "Hash functions are trapdoor functions; RSA isn't",
+        ],
+        "**2.** Why isn't a hash function a trapdoor function?",
+    )
+    hw_q3d = mo.ui.number(start=0, stop=1000, step=1, value=_a.get("q3d"), label="d =")
+    hw_q3c = mo.ui.number(start=0, stop=1000, step=1, value=_a.get("q3c"), label="ciphertext c =")
+    hw_q4 = _r(
+        "q4",
+        ["About 4 times as many", "About 16 times as many", "About 4 more tries", "About twice as many"],
+        "**4.** In the toy mining game, difficulty rises by 4 leading zero bits. How do the expected tries change?",
+    )
+    hw_q5 = mo.ui.number(start=0, stop=30, step=1, value=_a.get("q5"), label="Confirmations z =")
+    hw_q6 = _r(
+        "q6",
+        [
+            "The one with more blocks, because length shows more agreement",
+            "The one with more total work, because rewriting it costs the most hashing",
+            "The one they heard about first, always",
+            "Whichever has the newer timestamp",
+        ],
+        "**6.** Two valid chains: one has more blocks, the other more total work. Which do nodes follow?",
+    )
+    return hw_q1, hw_q2, hw_q3c, hw_q3d, hw_q4, hw_q5, hw_q6
+
+
+@app.cell(hide_code=True)
+def _(hw_q1, hw_q2, hw_q3c, hw_q3d, hw_q4, hw_q5, hw_q6, math, mo):
+    def _fb(ok, why):
+        if ok is None:
+            return mo.md("")
+        return mo.callout(mo.md(("**Right.** " if ok else "**Not quite.** ") + why), kind="success" if ok else "danger")
+
+    _w = {
+        "q1": {
+            "Preimage resistance": (True, "Given a hash, nobody can compute an input that produces it. A thief can still *guess* common passwords and hash each guess, which is why real sites add a per-user salt and a slow function like Argon2id (Hash Functions section)."),
+            "Collision resistance": (False, "Collision resistance is about finding *two* inputs with the same hash. Reading a password back out of its hash means going backwards from one output: that's preimage resistance."),
+            "The avalanche effect": (False, "The avalanche effect makes similar passwords give unrelated hashes, which helps, but the property that blocks working backwards from a hash is preimage resistance."),
+            "Fixed output length": (False, "Length alone protects nothing: a reversible function can have a fixed length too. The property is preimage resistance."),
+        },
+        "q2": {
+            "A trapdoor is easy to compute one way and hard to reverse unless you hold a secret; a hash has no secret that reverses it, for anyone": (True, "RSA has a trapdoor: whoever knows the factors of N can compute d and undo encryption. A hash has no such key, so not even its designer can invert it. That's why hashes are used for integrity and commitments, and RSA or elliptic curves for keys."),
+        },
+        "q4": {
+            "About 16 times as many": (True, "Each extra zero bit halves the chance a try succeeds, so 4 bits multiply the expected tries by 2⁴ = 16. Real Bitcoin adjusts the target every 2016 blocks to keep blocks about 10 minutes apart."),
+        },
+        "q6": {
+            "The one with more total work, because rewriting it costs the most hashing": (True, "Nodes follow the chain with the most accumulated work, not the most blocks. A long chain of easy blocks can carry less work than a shorter chain of hard ones."),
+        },
+    }
+
+    def _radio_fb(q, key, default_wrong):
+        v = q.value
+        if v is None:
+            return _fb(None, "")
+        ok, why = _w[key].get(v, (False, default_wrong))
+        return _fb(ok, why)
+
+    hw_a = {}
+    _f1 = _radio_fb(hw_q1, "q1", "")
+    hw_a["q1"] = hw_q1.value == "Preimage resistance"
+    _f2 = _radio_fb(hw_q2, "q2", "Easy one way, hard back *unless you hold a secret*: that's a trapdoor. A hash is one-way for everyone, because no secret undoes it.")
+    hw_a["q2"] = hw_q2.value == "A trapdoor is easy to compute one way and hard to reverse unless you hold a secret; a hash has no secret that reverses it, for anyone"
+    _f4 = _radio_fb(hw_q4, "q4", "Each extra leading zero bit halves the chance per try, so expected tries double per bit: 2⁴ = 16 times as many for 4 bits.")
+    hw_a["q4"] = hw_q4.value == "About 16 times as many"
+    _f6 = _radio_fb(hw_q6, "q6", "Nodes follow the most accumulated work. Block count is only a stand-in when every block has the same difficulty.")
+    hw_a["q6"] = hw_q6.value == "The one with more total work, because rewriting it costs the most hashing"
+
+    # Q3: p = 5, q = 11, e = 3 -> N = 55, phi = 40, d = 27, c = 2^3 mod 55 = 8
+    _d, _c = hw_q3d.value or None, hw_q3c.value or None  # 0 = not answered yet
+    if _d is None and _c is None:
+        _f3 = _fb(None, "")
+    else:
+        _ok_d, _ok_c = _d == 27, _c == 8
+        if _ok_d and _ok_c:
+            _f3 = _fb(True, "N = 55 and φ(N) = 4 × 10 = 40. d = 27 because 3 × 27 = 81 = 2 × 40 + 1. c = 2³ mod 55 = 8.")
+        else:
+            _parts = []
+            if not _ok_d:
+                _parts.append("d is the inverse of e mod φ(N), with φ(N) = (p − 1)(q − 1) = 40, not mod N = 55. Which d makes 3d leave remainder 1 when divided by 40?" if _d != 37 else "37 is the inverse of 3 mod 55 (mod N). Use φ(N) = (p − 1)(q − 1) = 40 instead.")
+            if not _ok_c:
+                _parts.append("Encrypt with the public key: c = mᵉ mod N = 2³ mod 55.")
+            _f3 = _fb(False, " ".join(_parts))
+    hw_a["q3"] = _d == 27 and _c == 8
+
+    # Q5: the exact formula from the double-spend section (Rosenfeld 2014)
+    def _exact(q, z):
+        p, s = 1 - q, 1.0
+        for m in range(z + 1):
+            s -= math.comb(m + z - 1, m) * (p**z * q**m - p**m * q**z)
+        return s
+
+    _z_ans = next(z for z in range(1, 30) if _exact(0.10, z) < 0.01)
+    if not hw_q5.value:  # 0 = not answered yet
+        _f5 = _fb(None, "")
+    elif hw_q5.value == _z_ans:
+        _f5 = _fb(True, f"z = {_z_ans}: the exact attacker success is {_exact(0.1, _z_ans):.2%}, against {_exact(0.1, _z_ans - 1):.2%} at z = {_z_ans - 1}. The whitepaper's table gives the same z here (0.35% at 4, 1.3% at 3).")
+    else:
+        _v = int(hw_q5.value)
+        _f5 = _fb(False, (f"At z = {_v} the exact probability is {_exact(0.1, _v):.2%}. " if 0 < _v < 30 else "") + "Set the simulation's attacker share to 10% and find the first z where the exact column drops below 1%.")
+    hw_a["q5"] = hw_q5.value == _z_ans
+
+    mo.vstack(
+        [
+            mo.md("## Step 3: Six questions\n\nAnswer each one; the explanation appears right away. You can change an answer after reading it. All six need to be right to unlock the completion step."),
+            hw_q1, _f1,
+            hw_q2, _f2,
+            mo.md("**3.** Toy RSA: p = 5, q = 11, e = 3. Find the private exponent d, then encrypt the message m = 2."),
+            mo.hstack([hw_q3d, hw_q3c], justify="start", gap=2), _f3,
+            hw_q4, _f4,
+            mo.md("**5.** Use the double-spend simulation (Properties of Bitcoin). An attacker has 10% of the hashrate. How many confirmations does a merchant need before the attacker's success chance, by the exact formula, drops below 1%?"),
+            hw_q5, _f5,
+            hw_q6, _f6,
+        ],
+        gap=1,
+    )
+    return (hw_a,)
+
+
+@app.cell(hide_code=True)
+def _(
+    hw_code1,
+    hw_code2,
+    hw_code3,
+    hw_code4,
+    hw_name,
+    hw_q1,
+    hw_q2,
+    hw_q3c,
+    hw_q3d,
+    hw_q4,
+    hw_q5,
+    hw_q6,
+    hw_saver_cls,
+):
+    # Progress store, part 2 (saver): each change re-renders a tiny invisible
+    # widget whose only job is to write the current state to localStorage.
+    hw_saver_cls(
+        saved={
+            "name": hw_name.value,
+            "code": {"t1": hw_code1.value, "t2": hw_code2.value, "t3": hw_code3.value, "t4": hw_code4.value},
+            "answers": {
+                "q1": hw_q1.value, "q2": hw_q2.value, "q3d": hw_q3d.value, "q3c": hw_q3c.value,
+                "q4": hw_q4.value, "q5": hw_q5.value, "q6": hw_q6.value,
+            },
+        }
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(HW_CONTRACT, hw_a, hw_name, hw_ok1, hw_ok2, hw_ok3, hw_wallet, mo):
+    _items = [
+        ("Name entered", bool(hw_name.value.strip())),
+        ("Task 1: double SHA-256", hw_ok1),
+        ("Task 2: Merkle root", hw_ok2),
+        ("Task 3: block hash", hw_ok3),
+        (f"Questions: {sum(hw_a.values())} of 6 right", all(hw_a.values()) and len(hw_a) == 6),
+    ]
+    hw_ready = all(ok for _, ok in _items)
+    _who = hw_name.value.strip() or "you"
+    _list = "\n".join(f"- {'✅' if ok else '⬜'} {t}" for t, ok in _items)
+    mo.vstack(
+        [
+            mo.md(f"""
+    ## Step 4: Record your completion onchain
+
+    {_list}
+
+    {"**All done, " + _who + ".** Record it below." if hw_ready else "The record button turns on when every box is ticked."}
+
+    **What the transaction makes public, forever:** your wallet address, the number 1 (this week) and the block time. It calls `recordCompletion(1)` on the shared [B@B completion contract](https://sepolia.etherscan.io/address/{HW_CONTRACT}#code) on Sepolia. Your name, code and answers are not in it.
+
+    **What it proves:** the checks above run in your browser, so the record is your claim that you finished Week 1, not independent proof that every answer was right. Each wallet can record each week once; if yours already has, the notebook says so instead of sending another transaction.
+
+    Your wallet shows the transaction before anything is sent: approve it there. If you reject it or it fails, nothing is recorded and you can try again; your homework stays saved either way.
+    """),
+            hw_wallet("record", ready=hw_ready),
+        ],
+        gap=1,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    That's Week 1. Next week builds on the block you just verified: how a whole network of nodes agrees on which blocks count.
     """)
     return
 

@@ -27,7 +27,7 @@ Every heading from the original Week 1 page, in its original order, and where it
 | └ From a Chain to a Network (making blocks, UTXO, gossip, longest chain, Further Reading) | Same heading | Transaction lifecycle diagram; quick check |
 | └ Properties of Bitcoin (decentralization, incentives, ordering, 51% attack, closing note, Further Reading) | Same heading | Experiment 5: Double-spend race (simulation); quick check |
 | *(new)* Key takeaways | End of notebook | |
-| *(new)* Homework | "Coming soon" placeholder until Phase 3; listed in the sidebar | |
+| *(new)* Homework | End of notebook, after Key takeaways: name and wallet, three coding tasks plus a bonus, six questions, onchain completion | Phase 3 |
 | *(new)* Sources | End of notebook | |
 
 The sidebar links to every top-level part plus Hash functions, Digital signatures, Elliptic curves, Mining, The network, Key takeaways, Homework and Sources; each link was checked to land on its heading (November 17, 2026). The Week 1 row on the curriculum overview page also lists "Introduction to Economics", but the Week 1 lesson page has no such section, so there is nothing to carry over.

@@ -1,0 +1,67 @@
+{
+ "abi": [
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "learner",
+     "type": "address"
+    },
+    {
+     "indexed": true,
+     "internalType": "uint8",
+     "name": "week",
+     "type": "uint8"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint256",
+     "name": "timestamp",
+     "type": "uint256"
+    }
+   ],
+   "name": "Completed",
+   "type": "event"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "address",
+     "name": "",
+     "type": "address"
+    },
+    {
+     "internalType": "uint8",
+     "name": "",
+     "type": "uint8"
+    }
+   ],
+   "name": "completedAt",
+   "outputs": [
+    {
+     "internalType": "uint256",
+     "name": "",
+     "type": "uint256"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "uint8",
+     "name": "week",
+     "type": "uint8"
+    }
+   ],
+   "name": "recordCompletion",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  }
+ ],
+ "bytecode": "0x6080604052348015600e575f5ffd5b5061023e8061001c5f395ff3fe608060405234801561000f575f5ffd5b5060043610610034575f3560e01c8063607544a314610038578063fd9e618814610071575b5f5ffd5b61005f6100463660046101aa565b5f60208181529281526040808220909352908152205481565b60405190815260200160405180910390f35b61008461007f3660046101e8565b610086565b005b60018160ff161015801561009e575060068160ff1611155b6100e25760405162461bcd60e51b815260206004820152601060248201526f3bb2b2b59036bab9ba1031329018969b60811b60448201526064015b60405180910390fd5b335f9081526020818152604080832060ff851684529091529020541561013d5760405162461bcd60e51b815260206004820152601060248201526f185b1c9958591e481c9958dbdc99195960821b60448201526064016100d9565b335f8181526020818152604080832060ff861680855290835292819020429081905590519081529192917fd7fcf929356a08a8cc28839b644a1f85d8aabf80aad83114e4e3c9e43275776f910160405180910390a350565b803560ff811681146101a5575f5ffd5b919050565b5f5f604083850312156101bb575f5ffd5b82356001600160a01b03811681146101d1575f5ffd5b91506101df60208401610195565b90509250929050565b5f602082840312156101f8575f5ffd5b61020182610195565b939250505056fea2646970667358221220434a918768787dd48760af74e499cda62b26d2f42260f9f1348b81bf99f1ed3864736f6c634300081c0033"
+}
